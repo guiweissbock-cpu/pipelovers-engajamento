@@ -270,7 +270,7 @@ function runEm(){
       '<tbody>'+rows+'</tbody></table></div></div>';
   }
   var _emb=document.getElementById("em-body");
-  _emb.innerHTML='<div class="sec">'+fd.length+' Empresas</div><div class="cogrid" id="cogrid">'+cards+'</div>'+det;
+  _emb.innerHTML='<div class="sec">'+fd.length+' Empresas</div>'+det+'<div class="cogrid" id="cogrid">'+cards+'</div>';
   var _cg=document.getElementById("cogrid");
   if(_cg){_cg.addEventListener("click",function(ev){
     var card=ev.target.closest?ev.target.closest(".cocard"):null;
