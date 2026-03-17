@@ -242,7 +242,7 @@ function runEm(){
     var fc=p>=70?"var(--green)":p>=40?"var(--yel)":"var(--red)";
     var pc2=p>=70?"p-g":p>=40?"p-y":"p-r";
     var isSel=(selCoIdx===idx)?" sel":"";
-    return '<div class="cocard'+isSel+'" onclick="pickCo('+idx+')">'+
+    return '<div class="cocard'+isSel+'" data-idx="'+idx+'" data-emp="'+esc(co.empresa)+'">'+
       '<div class="co-top"><div><div class="co-name">'+esc(co.empresa)+'</div><div class="co-csm">'+esc(co.csm||"Sem CSM")+'</div></div>'+
       '<span class="pill '+pc2+'">'+p+'%</span></div>'+
       '<div class="co-bar"><div class="co-bf" style="width:'+p+'%;background:'+fc+'"></div></div>'+
@@ -258,7 +258,7 @@ function runEm(){
   var det='';
   if(selCoIdx!==null&&selCoIdx<fd.length){
     var selEmpresa=fd[selCoIdx].empresa;
-    var cu=U.filter(function(u){return u.company===selEmpresa;});
+    var cu=U.filter(function(u){return u.company===selEmpresa||u.company.toLowerCase()===selEmpresa.toLowerCase();});
     var rows=cu.map(function(u){
       return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
         '<td>'+fPill(u.flag)+'</td><td>'+(u.days_inactive>=9000?"\u2014":u.days_inactive+"d")+'</td>'+
@@ -269,7 +269,16 @@ function runEm(){
       '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Flag</th><th>Inativo h\xE1</th><th>\xDAltimo consumo</th><th>Total aulas</th><th>Criado em</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table></div></div>';
   }
-  document.getElementById("em-body").innerHTML='<div class="sec">'+fd.length+' Empresas</div><div class="cogrid">'+cards+'</div>'+det;
+  var _emb=document.getElementById("em-body");
+  _emb.innerHTML='<div class="sec">'+fd.length+' Empresas</div><div class="cogrid" id="cogrid">'+cards+'</div>'+det;
+  var _cg=document.getElementById("cogrid");
+  if(_cg){_cg.addEventListener("click",function(ev){
+    var card=ev.target.closest?ev.target.closest(".cocard"):null;
+    if(!card)return;
+    var i=parseInt(card.getAttribute("data-idx"),10);
+    selCoIdx=(selCoIdx===i)?null:i;
+    runEm();
+  });}
 }
 function pickCo(i){selCoIdx=(selCoIdx===i)?null:i;runEm();}
 document.getElementById("em-q").addEventListener("input",runEm);
