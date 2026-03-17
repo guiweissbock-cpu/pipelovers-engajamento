@@ -1,0 +1,35 @@
+name: Atualizar Dashboard de Engajamento
+
+on:
+  push:
+    paths:
+      - "consumo.csv"
+      - "clientes.csv"
+      - "usuarios.csv"
+      - "nao_iniciou.csv"
+
+jobs:
+  gerar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Gerar dashboard
+        run: python3 gerar_dashboard.py
+
+      - name: Publicar index.html
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Dashboard atualizado - $(date '+%d/%m/%Y %H:%M')"
+          git push
