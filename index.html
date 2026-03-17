@@ -232,18 +232,17 @@ function togOv(g){ovF=(ovF===g)?null:g;runOv();}
 document.getElementById("ov-co").addEventListener("change",runOv);
 document.getElementById("ov-csm").addEventListener("change",runOv);
 document.getElementById("ov-rst").addEventListener("click",function(){document.getElementById("ov-co").value="";document.getElementById("ov-csm").value="";ovF=null;runOv();});
-var selCo=null;
+var selCoIdx=null;
 function runEm(){
   var q=document.getElementById("em-q").value.toLowerCase(),csm=document.getElementById("em-csm").value;
   var fd=C.filter(function(c){if(q&&c.empresa.toLowerCase().indexOf(q)<0)return false;if(csm&&c.csm!==csm)return false;return true;});
   document.getElementById("em-ctag").textContent=fd.length+" empresas";
-  var cards=fd.map(function(co){
+  var cards=fd.map(function(co,idx){
     var p=pct(co.active_m,co.total);
     var fc=p>=70?"var(--green)":p>=40?"var(--yel)":"var(--red)";
     var pc2=p>=70?"p-g":p>=40?"p-y":"p-r";
-    var isSel=(selCo===co.empresa)?" sel":"";
-    var ee=esc(co.empresa).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-    return '<div class="cocard'+isSel+'" onclick="pickCo(\''+ee+'\')">'+
+    var isSel=(selCoIdx===idx)?" sel":"";
+    return '<div class="cocard'+isSel+'" onclick="pickCo('+idx+')">'+
       '<div class="co-top"><div><div class="co-name">'+esc(co.empresa)+'</div><div class="co-csm">'+esc(co.csm||"Sem CSM")+'</div></div>'+
       '<span class="pill '+pc2+'">'+p+'%</span></div>'+
       '<div class="co-bar"><div class="co-bf" style="width:'+p+'%;background:'+fc+'"></div></div>'+
@@ -257,24 +256,25 @@ function runEm(){
       '</div></div>';
   }).join('');
   var det='';
-  if(selCo){
-    var cu=U.filter(function(u){return u.company===selCo;});
+  if(selCoIdx!==null&&selCoIdx<fd.length){
+    var selEmpresa=fd[selCoIdx].empresa;
+    var cu=U.filter(function(u){return u.company===selEmpresa;});
     var rows=cu.map(function(u){
       return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
         '<td>'+fPill(u.flag)+'</td><td>'+(u.days_inactive>=9000?"\u2014":u.days_inactive+"d")+'</td>'+
         '<td>'+esc(u.last_consumed||"\u2014")+'</td><td>'+u.total_consumed+'</td><td>'+esc(u.created_at||"\u2014")+'</td></tr>';
     }).join('');
-    det='<div class="det"><div class="det-ttl"><span>'+esc(selCo)+' \u2014 '+cu.length+' usu\xE1rios</span>'+
-      '<span class="cls" onclick="selCo=null;runEm()">&#10005;</span></div>'+
+    det='<div class="det"><div class="det-ttl"><span>'+esc(selEmpresa)+' \u2014 '+cu.length+' usu\xE1rios</span>'+
+      '<span class="cls" onclick="selCoIdx=null;runEm()">&#10005;</span></div>'+
       '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Flag</th><th>Inativo h\xE1</th><th>\xDAltimo consumo</th><th>Total aulas</th><th>Criado em</th></tr></thead>'+
       '<tbody>'+rows+'</tbody></table></div></div>';
   }
   document.getElementById("em-body").innerHTML='<div class="sec">'+fd.length+' Empresas</div><div class="cogrid">'+cards+'</div>'+det;
 }
-function pickCo(e){selCo=(selCo===e)?null:e;runEm();}
+function pickCo(i){selCoIdx=(selCoIdx===i)?null:i;runEm();}
 document.getElementById("em-q").addEventListener("input",runEm);
 document.getElementById("em-csm").addEventListener("change",runEm);
-document.getElementById("em-rst").addEventListener("click",function(){document.getElementById("em-q").value="";document.getElementById("em-csm").value="";selCo=null;runEm();});
+document.getElementById("em-rst").addEventListener("click",function(){document.getElementById("em-q").value="";document.getElementById("em-csm").value="";selCoIdx=null;runEm();});
 function runUs(){
   var q=document.getElementById("us-q").value.toLowerCase();
   var co=document.getElementById("us-co").value,csm=document.getElementById("us-csm").value;
