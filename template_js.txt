@@ -1,0 +1,391 @@
+document.getElementById("upd-lbl").textContent="Atualizado em "+UPD;
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function pct(a,b){return b>0?Math.round(a/b*100):0;}
+function mSince(ds){if(!ds)return 999;var d=new Date(ds),n=new Date();return(n.getFullYear()-d.getFullYear())*12+(n.getMonth()-d.getMonth());}
+function fPill(f){
+  if(f==="offensive")return'<span class="pill p-o">&#128293; Ofensiva</span>';
+  if(f==="green")    return'<span class="pill p-g">&#128994; Green</span>';
+  if(f==="yellow")   return'<span class="pill p-y">&#128993; Yellow</span>';
+  if(f==="red")      return'<span class="pill p-r">&#128308; Red</span>';
+  return'<span class="pill p-k">&#9899; Black</span>';
+}
+function stPill(s){
+  if(s==="Churn")  return'<span class="pill p-r">Churn</span>';
+  if(s==="Inativo")return'<span class="pill p-k">Inativo</span>';
+  if(s==="Ativo")  return'<span class="pill p-g">Ativo</span>';
+  return'<span class="pill p-p">N\xE3o cadastrada</span>';
+}
+function goTab(n,el){
+  document.querySelectorAll(".pg").forEach(function(p){p.classList.remove("on");});
+  document.querySelectorAll(".ntab").forEach(function(t){t.classList.remove("on");});
+  document.getElementById("pg-"+n).classList.add("on");el.classList.add("on");
+}
+function pop(id,vals){var s=document.getElementById(id);vals.forEach(function(v){var o=document.createElement("option");o.value=v;o.textContent=v;s.appendChild(o);});}
+var acos=[...new Set(U.map(function(u){return u.company;}))].sort();
+var acsms=[...new Set(U.map(function(u){return u.csm;}).filter(Boolean))].sort();
+pop("ov-co",acos);pop("ov-csm",acsms);pop("em-csm",acsms);
+pop("us-co",acos);pop("us-csm",acsms);
+pop("na-co",[...new Set(NV.map(function(u){return u.company;}))].sort());
+pop("na-csm",[...new Set(NV.map(function(u){return u.csm;}).filter(Boolean))].sort());
+var ovF=null;
+function runOv(){
+  var co=document.getElementById("ov-co").value,csm=document.getElementById("ov-csm").value;
+  var crChecked=[...document.querySelectorAll(".ov-cr:checked")].map(function(c){return c.value;});
+  var fd=U.filter(function(u){
+    if(co&&u.company!==co)return false;
+    if(csm&&u.csm!==csm)return false;
+    if(crChecked.length>0){
+      var noDate=!u.created_at;
+      var m=noDate?-1:mSince(u.created_at);
+      var lt3=!noDate&&m<3,is3to6=!noDate&&m>=3&&m<=6,gt6=!noDate&&m>6;
+      var ok=(crChecked.indexOf("lt3")>=0&&lt3)||(crChecked.indexOf("3to6")>=0&&is3to6)||
+             (crChecked.indexOf("gt6")>=0&&gt6)||(crChecked.indexOf("nodate")>=0&&noDate);
+      if(!ok)return false;
+    }
+    return true;
+  });
+  var tot=fd.length,aM=fd.filter(function(u){return u.active_this_month;}).length;
+  var off=fd.filter(function(u){return u.flag==="offensive";});
+  var yel=fd.filter(function(u){return u.flag==="yellow";});
+  var red=fd.filter(function(u){return u.flag==="red";});
+  var blk=fd.filter(function(u){return u.flag==="black";});
+  var kpis=[
+    {lbl:"Total Usu\xE1rios",    val:tot,       sub:"empresas ativas",              cls:"c-b",grp:null},
+    {lbl:"Ativos este m\xEAs",   val:aM,        sub:pct(aM,tot)+"% do total",       cls:"c-g",grp:"active"},
+    {lbl:"&#128293; Ofensiva",   val:off.length,sub:"ativos nos 2 \xFAltimos meses",cls:"c-o",grp:"offensive"},
+    {lbl:"&#128993; Yellow",     val:yel.length,sub:"inativos 30-60 dias",          cls:"c-y",grp:"yellow"},
+    {lbl:"&#128308; Red",        val:red.length,sub:"inativos 60-90 dias",          cls:"c-r",grp:"red"},
+    {lbl:"&#9899; Black",        val:blk.length,sub:"inativos 90+ dias",            cls:"c-k",grp:"black"},
+  ];
+  var kh='<div class="krow k6">';
+  kpis.forEach(function(k){
+    var isSel=(ovF===k.grp&&k.grp!==null)?" sel":"",isClk=k.grp?" clk":"";
+    kh+='<div class="kpi'+isClk+isSel+'"'+(k.grp?' onclick="togOv(\''+k.grp+'\')"':'')+'>'+
+      '<div class="klbl">'+k.lbl+'</div><div class="kval '+k.cls+'">'+k.val+'</div><div class="ksub">'+k.sub+'</div></div>';
+  });
+  kh+='</div>';
+  var dh='';
+  if(ovF){
+    var sub;
+    if(ovF==="active")sub=fd.filter(function(u){return u.active_this_month;});
+    else if(ovF==="offensive")sub=off;
+    else sub=fd.filter(function(u){return u.flag===ovF;});
+    var seen={};sub=sub.filter(function(u){if(seen[u.email])return false;seen[u.email]=1;return true;});
+    var lblMap={"active":"Ativos este m\xeas","offensive":"Em Ofensiva (2 \xFAltimos meses)","yellow":"Yellow Flag","red":"Red Flag","black":"Black Flag"};
+    var rows=sub.slice(0,300).map(function(u){
+      return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
+        '<td>'+esc(u.company)+'</td><td>'+esc(u.csm||"\u2014")+'</td><td>'+fPill(u.flag)+'</td>'+
+        '<td>'+esc(u.last_consumed||"\u2014")+'</td><td>'+u.total_consumed+'</td></tr>';
+    }).join('');
+    dh='<div class="det"><div class="det-ttl"><span>'+lblMap[ovF]+' \u2014 '+sub.length+' usu\xE1rios</span>'+
+      '<span class="cls" onclick="ovF=null;runOv()">&#10005;</span></div>'+
+      '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Empresa</th><th>CSM</th><th>Flag</th><th>\xDAltimo consumo</th><th>Total aulas</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div>'+
+      (sub.length>300?'<div style="padding:8px;font-size:11px;color:var(--g400);">Mostrando 300 de '+sub.length+'</div>':'')+
+    '</div>';
+  }
+  document.getElementById("ov-body").innerHTML='<div style="padding:20px 24px;">'+kh+dh+'</div>';
+}
+function togOv(g){ovF=(ovF===g)?null:g;runOv();}
+document.getElementById("ov-co").addEventListener("change",runOv);
+document.getElementById("ov-csm").addEventListener("change",runOv);
+document.querySelectorAll(".ov-cr").forEach(function(c){c.addEventListener("change",runOv);});
+document.getElementById("ov-grupo").addEventListener("change",runOv);
+
+// Populate grupo dropdown
+var grupos=[...new Set(Object.keys(CHARTS.grupos))].sort();
+var grSel=document.getElementById("ov-grupo");
+grupos.forEach(function(g){var o=document.createElement("option");o.value=g;o.textContent=g;grSel.appendChild(o);});
+
+// Init charts
+var chartMensal=null,chartGrupos=null;
+function initCharts(){
+  var meses=CHARTS.meses.map(function(m){return m.replace(/^\d{4}-/,'');});
+  var COLOR_LINE='#3b82f6';
+  var COLORS=['#3b82f6','#059669','#d97706','#dc2626','#7c3aed','#ea580c'];
+
+  // Chart mensal — total vs ativos
+  var ctx1=document.getElementById("chart-mensal").getContext("2d");
+  chartMensal=new Chart(ctx1,{
+    type:"line",
+    data:{
+      labels:meses,
+      datasets:[
+        {
+          label:"Total histórico",
+          data:CHARTS.evolucao_total,
+          borderColor:"#94a3b8",backgroundColor:"rgba(148,163,184,.06)",
+          borderWidth:2,pointRadius:2,tension:.35,fill:true,
+          borderDash:[4,3]
+        },
+        {
+          label:"Empresas ativas hoje",
+          data:CHARTS.evolucao_ativos,
+          borderColor:COLOR_LINE,backgroundColor:"rgba(59,130,246,.08)",
+          borderWidth:2.5,pointRadius:3,pointBackgroundColor:COLOR_LINE,tension:.35,fill:true
+        }
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:"bottom",labels:{font:{size:10},boxWidth:12,padding:8}},
+        tooltip:{mode:"index",intersect:false}
+      },
+      scales:{x:{grid:{display:false},ticks:{font:{size:10}}},
+              y:{grid:{color:"rgba(0,0,0,.04)"},ticks:{font:{size:10}}}}}
+  });
+
+  // Chart grupos — ativos (sólido) vs total (tracejado)
+  var ctx2=document.getElementById("chart-grupos").getContext("2d");
+  var gruposKeys=Object.keys(CHARTS.grupos_ativos);
+  var dsGrupos=[];
+  gruposKeys.forEach(function(g,i){
+    var cor=COLORS[i%COLORS.length];
+    // Linha ativos (sólida)
+    dsGrupos.push({
+      label:g,data:CHARTS.grupos_ativos[g],
+      borderColor:cor,backgroundColor:"transparent",
+      borderWidth:2.5,pointRadius:2,tension:.35
+    });
+    // Linha total (tracejada, mais fina)
+    dsGrupos.push({
+      label:g+" (total)",data:CHARTS.grupos_total[g],
+      borderColor:cor,backgroundColor:"transparent",
+      borderWidth:1.5,pointRadius:0,tension:.35,
+      borderDash:[4,3],
+      legend:{display:false}
+    });
+  });
+  chartGrupos=new Chart(ctx2,{
+    type:"line",
+    data:{labels:meses,datasets:dsGrupos},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{
+          position:"bottom",
+          labels:{
+            font:{size:10},boxWidth:12,
+            filter:function(item){return item.text.indexOf("(total)")<0;}
+          }
+        },
+        tooltip:{
+          mode:"index",intersect:false,
+          filter:function(item){return item.dataset.label.indexOf("(total)")<0;}
+        }
+      },
+      scales:{x:{grid:{display:false},ticks:{font:{size:10}}},
+              y:{grid:{color:"rgba(0,0,0,.04)"},ticks:{font:{size:10}}}}}
+  });
+
+  // Retention
+  var retHtml="<div class=\"ret-grid\">";
+  CHARTS.retencao.slice(-6).forEach(function(r){
+    var cor=r.taxa>=70?"var(--green)":r.taxa>=50?"var(--yel)":"var(--red)";
+    retHtml+="<div class=\"ret-card\"><div class=\"ret-pct\" style=\"color:"+cor+"\">"+r.taxa+"%</div>"+
+      "<div class=\"ret-mes\">"+r.mes.replace(/^\d{4}-/,"")+"</div>"+
+      "<div class=\"ret-sub\">"+r.retidos+"/"+r.base+"</div></div>";
+  });
+  retHtml+="</div>";
+  document.getElementById("ret-body").innerHTML=retHtml;
+
+  // Ranking
+  var maxAulas=CHARTS.ranking[0][1];
+  var rankHtml="";
+  CHARTS.ranking.slice(0,12).forEach(function(r,i){
+    var w=Math.round(r[1]/maxAulas*100);
+    rankHtml+="<div class=\"rank-row\"><span class=\"rank-num\">"+(i+1)+"</span>"+
+      "<span class=\"rank-name\">"+r[0]+"</span>"+
+      "<div class=\"rank-bar-wrap\"><div class=\"rank-bar-fill\" style=\"width:"+w+"%\"></div></div>"+
+      "<span class=\"rank-val\">"+r[1]+"</span></div>";
+  });
+  document.getElementById("rank-body").innerHTML=rankHtml;
+
+  document.getElementById("ov-charts").style.display="block";
+}
+
+function updateChartMensal(grupo){
+  if(!chartMensal)return;
+  if(!grupo){
+    chartMensal.data.datasets[0].data=CHARTS.evolucao_total;
+    chartMensal.data.datasets[0].label="Total histórico";
+    chartMensal.data.datasets[1].data=CHARTS.evolucao_ativos;
+    chartMensal.data.datasets[1].label="Empresas ativas hoje";
+    document.getElementById("grupo-sel-lbl").textContent="";
+  }else{
+    var tot=CHARTS.grupos_total[grupo]||[];
+    var atv=CHARTS.grupos_ativos[grupo]||[];
+    chartMensal.data.datasets[0].data=tot;
+    chartMensal.data.datasets[0].label=grupo+" (total)";
+    chartMensal.data.datasets[1].data=atv;
+    chartMensal.data.datasets[1].label=grupo+" (ativas)";
+    document.getElementById("grupo-sel-lbl").textContent="— "+grupo;
+  }
+  chartMensal.update();
+}
+
+// Hook grupo filter into chart
+document.getElementById("ov-grupo").addEventListener("change",function(){
+  updateChartMensal(this.value);
+});
+
+setTimeout(initCharts,100);
+document.getElementById("ov-rst").addEventListener("click",function(){
+  document.getElementById("ov-co").value="";
+  document.getElementById("ov-csm").value="";
+  document.getElementById("ov-grupo").value="";
+  document.querySelectorAll(".ov-cr").forEach(function(c){c.checked=false;});
+  updateChartMensal("");
+  ovF=null;runOv();
+});
+var selCo=null;
+function runEm(){
+  var q=document.getElementById("em-q").value.toLowerCase(),csm=document.getElementById("em-csm").value;
+  var fd=C.filter(function(c){if(q&&c.empresa.toLowerCase().indexOf(q)<0)return false;if(csm&&c.csm!==csm)return false;return true;});
+  document.getElementById("em-ctag").textContent=fd.length+" empresas";
+  var cards=fd.map(function(co){
+    var p=pct(co.active_m,co.total);
+    var fc=p>=70?"var(--green)":p>=40?"var(--yel)":"var(--red)";
+    var pc2=p>=70?"p-g":p>=40?"p-y":"p-r";
+    var isSel=(selCo===co.empresa)?" sel":"";
+    var ee=esc(co.empresa).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+    return '<div class="cocard'+isSel+'" onclick="pickCo(\''+ee+'\')">'+
+      '<div class="co-top"><div><div class="co-name">'+esc(co.empresa)+'</div><div class="co-csm">'+esc(co.csm||"Sem CSM")+'</div></div>'+
+      '<span class="pill '+pc2+'">'+p+'%</span></div>'+
+      '<div class="co-bar"><div class="co-bf" style="width:'+p+'%;background:'+fc+'"></div></div>'+
+      '<div class="co-stats">'+
+        '<span class="cos"><span class="dot d-o"></span>'+co.offensive+'</span>'+
+        '<span class="cos"><span class="dot d-g"></span>'+co.green+'</span>'+
+        '<span class="cos"><span class="dot d-y"></span>'+co.yellow+'</span>'+
+        '<span class="cos"><span class="dot d-r"></span>'+co.red+'</span>'+
+        '<span class="cos"><span class="dot d-k"></span>'+co.black+'</span>'+
+        '<span style="font-size:10px;color:var(--g400);margin-left:auto;">'+co.total+' usu\xE1rios</span>'+
+      '</div></div>';
+  }).join('');
+  var det='';
+  if(selCo){
+    var cu=U.filter(function(u){return u.company===selCo;});
+    var rows=cu.map(function(u){
+      return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
+        '<td>'+fPill(u.flag)+'</td><td>'+(u.days_inactive>=9000?"\u2014":u.days_inactive+"d")+'</td>'+
+        '<td>'+esc(u.last_consumed||"\u2014")+'</td><td>'+u.total_consumed+'</td><td>'+esc(u.created_at||"\u2014")+'</td></tr>';
+    }).join('');
+    det='<div class="det"><div class="det-ttl"><span>'+esc(selCo)+' \u2014 '+cu.length+' usu\xE1rios</span>'+
+      '<span class="cls" onclick="selCo=null;runEm()">&#10005;</span></div>'+
+      '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Flag</th><th>Inativo h\xE1</th><th>\xDAltimo consumo</th><th>Total aulas</th><th>Criado em</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div></div>';
+  }
+  document.getElementById("em-body").innerHTML='<div class="sec">'+fd.length+' Empresas</div><div class="cogrid">'+cards+'</div>'+det;
+}
+function pickCo(e){selCo=(selCo===e)?null:e;runEm();}
+document.getElementById("em-q").addEventListener("input",runEm);
+document.getElementById("em-csm").addEventListener("change",runEm);
+document.getElementById("em-rst").addEventListener("click",function(){document.getElementById("em-q").value="";document.getElementById("em-csm").value="";selCo=null;runEm();});
+function runUs(){
+  var q=document.getElementById("us-q").value.toLowerCase();
+  var co=document.getElementById("us-co").value,csm=document.getElementById("us-csm").value;
+  var fl=document.getElementById("us-fl").value,cr=document.getElementById("us-cr").value;
+  var fd=U.filter(function(u){
+    if(q&&u.name.toLowerCase().indexOf(q)<0&&u.email.toLowerCase().indexOf(q)<0)return false;
+    if(co&&u.company!==co)return false;if(csm&&u.csm!==csm)return false;
+    if(fl&&u.flag!==fl)return false;
+    if(cr){var m=mSince(u.created_at);if(cr==="lt3"&&m>=3)return false;if(cr==="3to6"&&(m<3||m>6))return false;if(cr==="gt6"&&m<=6)return false;}
+    return true;
+  });
+  document.getElementById("us-ctag").textContent=fd.length+" usu\xE1rios";
+  var rows=fd.slice(0,500).map(function(u){
+    return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
+      '<td>'+esc(u.company)+'</td><td>'+esc(u.csm||"\u2014")+'</td><td>'+fPill(u.flag)+'</td>'+
+      '<td>'+(u.days_inactive>=9000?"\u2014":u.days_inactive+" dias")+'</td>'+
+      '<td>'+esc(u.last_consumed||"\u2014")+'</td><td>'+u.total_consumed+'</td><td>'+esc(u.created_at||"\u2014")+'</td></tr>';
+  }).join('');
+  document.getElementById("us-body").innerHTML=
+    '<div class="twrap"><div class="thdr"><div class="ttl">Lista de Usu\xE1rios</div>'+
+    '<div class="tcnt">'+(fd.length>500?"500 de "+fd.length+" \u2014 filtre para ver mais":fd.length+" usu\xE1rios")+'</div></div>'+
+    '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Empresa</th><th>CSM</th><th>Flag</th><th>Inativo h\xE1</th><th>\xDAltimo consumo</th><th>Total aulas</th><th>Criado em</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+document.getElementById("us-q").addEventListener("input",runUs);
+["us-co","us-csm","us-fl","us-cr"].forEach(function(id){document.getElementById(id).addEventListener("change",runUs);});
+document.getElementById("us-rst").addEventListener("click",function(){document.getElementById("us-q").value="";["us-co","us-csm","us-fl","us-cr"].forEach(function(id){document.getElementById(id).value="";});runUs();});
+function runNa(){
+  var q=document.getElementById("na-q").value.toLowerCase();
+  var co=document.getElementById("na-co").value,csm=document.getElementById("na-csm").value;
+  var fd=NV.filter(function(u){
+    if(q&&u.name.toLowerCase().indexOf(q)<0&&u.email.toLowerCase().indexOf(q)<0)return false;
+    if(co&&u.company!==co)return false;if(csm&&u.csm!==csm)return false;return true;
+  });
+  document.getElementById("na-ctag").textContent=fd.length+" usu\xE1rios";
+  var kpis='<div class="krow k3" style="margin-bottom:16px;">'+
+    '<div class="kpi"><div class="klbl">Nunca assistiram</div><div class="kval c-y">'+fd.length+'</div><div class="ksub">usu\xE1rios cadastrados</div></div>'+
+    '<div class="kpi"><div class="klbl">Empresas afetadas</div><div class="kval c-b">'+[...new Set(fd.map(function(u){return u.company;}))].length+'</div></div>'+
+    '<div class="kpi"><div class="klbl">CSMs envolvidos</div><div class="kval c-k">'+[...new Set(fd.map(function(u){return u.csm;}).filter(Boolean))].length+'</div></div>'+
+  '</div>';
+  var rows=fd.slice(0,500).map(function(u){
+    return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
+      '<td>'+esc(u.company)+'</td><td>'+esc(u.csm||"\u2014")+'</td><td>'+esc(u.created_at||"\u2014")+'</td></tr>';
+  }).join('');
+  document.getElementById("na-body").innerHTML=kpis+
+    '<div class="twrap"><div class="thdr"><div class="ttl">Cadastrados que nunca assistiram</div><div class="tcnt">'+fd.length+' usu\xE1rios</div></div>'+
+    '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Empresa</th><th>CSM</th><th>Criado em</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+document.getElementById("na-q").addEventListener("input",runNa);
+["na-co","na-csm"].forEach(function(id){document.getElementById(id).addEventListener("change",runNa);});
+document.getElementById("na-rst").addEventListener("click",function(){document.getElementById("na-q").value="";["na-co","na-csm"].forEach(function(id){document.getElementById(id).value="";});runNa();});
+function runNf(){
+  var q=document.getElementById("nf-q").value.toLowerCase();
+  var cons=document.getElementById("nf-cons").value;
+  var fd=NF.filter(function(c){
+    if(q&&c.empresa.toLowerCase().indexOf(q)<0)return false;
+    if(cons==="sim"&&!c.teve_consumo)return false;
+    if(cons==="nao"&&c.teve_consumo)return false;
+    return true;
+  });
+  document.getElementById("nf-ctag").textContent=fd.length+" empresas";
+  var kpis='<div class="krow k3" style="margin-bottom:16px;">'+
+    '<div class="kpi"><div class="klbl">Total empresas</div><div class="kval c-p">'+fd.length+'</div><div class="ksub">n\xE3o encontradas como ativas</div></div>'+
+    '<div class="kpi"><div class="klbl">Com consumo de aulas</div><div class="kval c-o">'+fd.filter(function(c){return c.teve_consumo;}).length+'</div></div>'+
+    '<div class="kpi"><div class="klbl">Usu\xE1rios nestas empresas</div><div class="kval c-b">'+fd.reduce(function(a,c){return a+c.total;},0)+'</div></div>'+
+  '</div>';
+  var rows=fd.map(function(c){
+    return '<tr><td style="font-weight:600;">'+esc(c.empresa)+'</td>'+
+      '<td style="font-weight:700;text-align:center;">'+c.total+'</td>'+
+      '<td>'+(c.teve_consumo?'<span class="pill p-g">&#10003; Sim</span>':'<span class="pill p-gr">N\xE3o</span>')+'</td></tr>';
+  }).join('');
+  document.getElementById("nf-body").innerHTML=kpis+
+    '<div class="ibox ibox-p">&#10067; Empresas com usu\xE1rios cadastrados que n\xE3o est\xE3o na base de clientes como <strong>Ativas</strong>. Mapeie e cadastre as que forem clientes ativos.</div>'+
+    '<div class="twrap"><div class="thdr"><div class="ttl">Empresas n\xE3o mapeadas</div><div class="tcnt">'+fd.length+' empresas</div></div>'+
+    '<div class="tscr"><table><thead><tr><th>Empresa</th><th>Usu\xE1rios</th><th>Consumiu aulas?</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+document.getElementById("nf-q").addEventListener("input",runNf);
+document.getElementById("nf-cons").addEventListener("change",runNf);
+document.getElementById("nf-rst").addEventListener("click",function(){document.getElementById("nf-q").value="";document.getElementById("nf-cons").value="";runNf();});
+function runOr(){
+  var q=document.getElementById("or-q").value.toLowerCase(),st=document.getElementById("or-st").value;
+  var sixAgo=new Date();sixAgo.setMonth(sixAgo.getMonth()-6);
+  var fd=OR.filter(function(u){
+    if(u.co_status==="Churn"){var recent=u.last_consumed&&new Date(u.last_consumed)>=sixAgo;if(!recent)return false;}
+    if(q&&u.name.toLowerCase().indexOf(q)<0&&u.email.toLowerCase().indexOf(q)<0&&u.company.toLowerCase().indexOf(q)<0)return false;
+    if(st&&u.co_status!==st)return false;return true;
+  });
+  document.getElementById("or-ctag").textContent=fd.length+" usu\xE1rios";
+  var kpis='<div class="krow k2" style="margin-bottom:16px;">'+
+    '<div class="kpi"><div class="klbl">Usu\xE1rios fora do dashboard</div><div class="kval c-p">'+fd.length+'</div><div class="ksub">empresa n\xE3o est\xE1 ativa na base</div></div>'+
+    '<div class="kpi"><div class="klbl">Empresas distintas</div><div class="kval c-b">'+[...new Set(fd.map(function(u){return u.company;}))].length+'</div></div>'+
+  '</div>';
+  var rows=fd.slice(0,500).map(function(u){
+    return '<tr><td><div style="font-weight:600;">'+esc(u.name)+'</div><div style="font-size:11px;color:var(--g400);">'+esc(u.email)+'</div></td>'+
+      '<td>'+esc(u.company)+'</td><td>'+stPill(u.co_status)+'</td>'+
+      '<td>'+(u.total_consumed>0?'<span class="pill p-g">&#10003; Sim ('+u.total_consumed+')</span>':'<span class="pill p-gr">N\xE3o</span>')+'</td></tr>';
+  }).join('');
+  document.getElementById("or-body").innerHTML=kpis+
+    '<div class="ibox ibox-y">&#9888;&#65039; Usu\xE1rios que consumiram aulas nos \xFAltimos 3 meses mas cuja empresa n\xE3o est\xE1 ativa na base. Corrija o status ou adicione um alias no script.</div>'+
+    '<div class="twrap"><div class="thdr"><div class="ttl">Usu\xE1rios fora do dashboard principal</div><div class="tcnt">'+(fd.length>500?"500 de "+fd.length:fd.length+" usu\xE1rios")+'</div></div>'+
+    '<div class="tscr"><table><thead><tr><th>Usu\xE1rio</th><th>Empresa</th><th>Status empresa</th><th>Consumiu aulas?</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+document.getElementById("or-q").addEventListener("input",runOr);
+document.getElementById("or-st").addEventListener("change",runOr);
+document.getElementById("or-rst").addEventListener("click",function(){document.getElementById("or-q").value="";document.getElementById("or-st").value="";runOr();});
+runOv();runEm();runUs();runNa();runNf();runOr();
