@@ -247,6 +247,105 @@ pop("us-co",acos);pop("us-csm",acsms);
 pop("na-co",[...new Set(NV.map(function(u){return u.company;}))].sort());
 pop("na-csm",[...new Set(NV.map(function(u){return u.csm;}).filter(Boolean))].sort());
 var ovF=null;
+function updateChartsFiltered(fd){
+  if(!chartMensal||!chartGrupos)return;
+  // Get set of emails in filtered users
+  var fdEmails={};
+  fd.forEach(function(u){fdEmails[u.email]=true;});
+  var allUsers=fd; // filtered user list
+
+  // Recalculate monthly counts from user monthly data
+  var mesTotal={},mesAtivos={};
+  var mesGrupos={};
+  // For total: use ALL U users filtered by same csm/co
+  // For ativos: use fd (already filtered)
+
+  // Build month->count from fd users
+  fd.forEach(function(u){
+    if(!u.monthly)return;
+    Object.keys(u.monthly).forEach(function(mes){
+      if(u.monthly[mes]>0){
+        if(!mesAtivos[mes])mesAtivos[mes]=new Set();
+        mesAtivos[mes].add(u.email);
+      }
+    });
+  });
+
+  // For total: filter U by same company/csm filters
+  var co=document.getElementById("ov-co").value;
+  var csm=document.getElementById("ov-csm").value;
+  U.forEach(function(u){
+    if(co&&u.company!==co)return;
+    if(csm&&u.csm!==csm)return;
+    if(!u.monthly)return;
+    Object.keys(u.monthly).forEach(function(mes){
+      if(u.monthly[mes]>0){
+        if(!mesTotal[mes])mesTotal[mes]=new Set();
+        mesTotal[mes].add(u.email);
+      }
+    });
+  });
+
+  // Map to chart data arrays using CHARTS.meses order
+  var newAtivos=CHARTS.meses.map(function(m){return mesAtivos[m]?mesAtivos[m].size:0;});
+  var newTotal=CHARTS.meses.map(function(m){return mesTotal[m]?mesTotal[m].size:0;});
+
+  // Update main chart
+  var grChecked=[...document.querySelectorAll(".ov-gr:checked")].map(function(c){return c.value;});
+  var grupo=grChecked.length===1?grChecked[0]:"";
+  if(!grupo){
+    chartMensal.data.datasets[0].data=newTotal;
+    chartMensal.data.datasets[0].label="Total histórico";
+    chartMensal.data.datasets[1].data=newAtivos;
+    chartMensal.data.datasets[1].label="Empresas ativas hoje";
+  }else{
+    // Per grupo filtered
+    var grAtivos=CHARTS.meses.map(function(m){
+      var cnt=0;
+      fd.forEach(function(u){
+        if(u.monthly&&u.monthly[m]>0){cnt++;}
+      });
+      return cnt;
+    });
+    chartMensal.data.datasets[1].data=grAtivos;
+    chartMensal.data.datasets[1].label=grupo+" (ativas)";
+  }
+  chartMensal.update();
+
+  // Update grupos chart (ativos only, per group)
+  // We need group info per user - get from CHARTS structure proportionally
+  // Simple approach: scale CHARTS.grupos_ativos by ratio of filtered/total ativos
+  chartGrupos.data.datasets.forEach(function(ds,i){
+    var g=ds.label;
+    var scaled=CHARTS.meses.map(function(m,mi){
+      var total=CHARTS.evolucao_ativos[mi]||1;
+      var ratio=total>0?(newAtivos[mi]/total):0;
+      var orig=CHARTS.grupos_ativos[g]?CHARTS.grupos_ativos[g][mi]:0;
+      return Math.round(orig*ratio);
+    });
+    ds.data=scaled;
+  });
+  chartGrupos.update();
+
+  // Update ranking
+  var empAulas={};
+  fd.forEach(function(u){
+    if(!u.monthly)return;
+    var tot=Object.values(u.monthly).reduce(function(a,b){return a+b;},0);
+    if(tot>0){empAulas[u.company]=(empAulas[u.company]||0)+tot;}
+  });
+  var ranked=Object.entries(empAulas).sort(function(a,b){return b[1]-a[1];}).slice(0,12);
+  var maxA=ranked[0]?ranked[0][1]:1;
+  var rankHtml="";
+  ranked.forEach(function(r,i){
+    var w=Math.round(r[1]/maxA*100);
+    rankHtml+="<div class=\"rank-row\"><span class=\"rank-num\">"+(i+1)+"</span>"+
+      "<span class=\"rank-name\">"+esc(r[0])+"</span>"+
+      "<div class=\"rank-bar-wrap\"><div class=\"rank-bar-fill\" style=\"width:"+w+"%\"></div></div>"+
+      "<span class=\"rank-val\">"+r[1]+"</span></div>";
+  });
+  if(document.getElementById("rank-body"))document.getElementById("rank-body").innerHTML=rankHtml;
+}
 function runOv(){
   var co=document.getElementById("ov-co").value,csm=document.getElementById("ov-csm").value;
   var crChecked=[...document.querySelectorAll(".ov-cr:checked")].map(function(c){return c.value;});
@@ -265,6 +364,8 @@ function runOv(){
     return true;
   });
   var tot=fd.length,aM=fd.filter(function(u){return u.active_this_month;}).length;
+  // Update charts based on filtered users
+  updateChartsFiltered(fd);
   var off=fd.filter(function(u){return u.flag==="offensive";});
   var yel=fd.filter(function(u){return u.flag==="yellow";});
   var red=fd.filter(function(u){return u.flag==="red";});
