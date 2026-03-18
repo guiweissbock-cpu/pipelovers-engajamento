@@ -106,20 +106,27 @@ td{padding:10px 12px;font-size:12px;border-bottom:1px solid var(--g100);vertical
   <div class="charts-grid-1">
     <div class="chart-section" style="margin:0;">
       <div class="chart-title">Usuários únicos por mês <span id="grupo-sel-lbl" style="font-size:10px;color:var(--sky);"></span></div>
-      <div class="chart-canvas-wrap"><canvas id="chart-mensal"></canvas></div>
+      <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chart-mensal"></canvas></div>
     </div>
 
   </div>
   <div class="charts-grid">
     <div class="chart-section" style="margin:0;">
       <div class="chart-title">Evolução por grupo</div>
-      <div class="chart-canvas-wrap"><canvas id="chart-grupos"></canvas></div>
+      <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chart-grupos"></canvas></div>
     </div>
     <div class="chart-section" style="margin:0;">
       <div class="chart-title">Top empresas (últimos 3 meses) <span style="font-size:10px;color:var(--g400);font-weight:400;">por nº de aulas</span></div>
       <div class="rank-list" id="rank-body"></div>
     </div>
   </div>
+<div style="padding:0 24px 20px;">
+  <div class="chart-section" style="margin:0;">
+    <div class="chart-title">Evolução por grupo &mdash; Base total (inclui churns e inativos)</div>
+    <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chart-grupos-total"></canvas></div>
+    <div id="toggle-grupos-total"></div>
+  </div>
+</div>
 </div>
 </div>
 
@@ -345,7 +352,7 @@ function initCharts(){
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,
-      layout:{padding:{top:20}},
+      layout:{padding:{top:28}},
       plugins:{
         legend:{display:true,position:"bottom",labels:{font:{size:10},boxWidth:12,padding:8}},
         tooltip:{mode:"index",intersect:false}
@@ -372,7 +379,6 @@ function initCharts(){
             var val=ds.data[i];
             if(val==null||val===0)return;
             // Only show every 2nd point to avoid clutter
-            if(i%2!==0)return;
             ctx.fillStyle=ds.borderColor||'#333';
             ctx.fillText(val,point.x,point.y-6);
           });
@@ -395,7 +401,7 @@ function initCharts(){
     type:"line",
     data:{labels:meses,datasets:dsGrupos},
     options:{responsive:true,maintainAspectRatio:false,
-      layout:{padding:{top:16}},
+      layout:{padding:{top:24}},
       plugins:{
         legend:{
           position:"bottom",
@@ -429,7 +435,7 @@ function initCharts(){
           meta.data.forEach(function(point,i){
             var val=ds.data[i];
             if(val==null||val===0)return;
-            if(i%3!==0)return; // every 3rd to avoid clutter on groups
+            if(i%2!==0)return;
             ctx.fillStyle=ds.borderColor||'#333';
             ctx.fillText(val,point.x,point.y-5);
           });
@@ -449,6 +455,71 @@ function initCharts(){
   toggleHtml+='</div>';
   document.getElementById("chart-grupos").insertAdjacentHTML('afterend',toggleHtml);
 
+  // Chart grupos TOTAL (inclui todas as empresas)
+  var ctx3=document.getElementById("chart-grupos-total").getContext("2d");
+  var dsGruposTotal=gruposKeys.map(function(g,i){
+    var cor=COLORS[i%COLORS.length];
+    return {label:g,data:CHARTS.grupos_total[g],
+      borderColor:cor,backgroundColor:"transparent",
+      borderWidth:2.5,pointRadius:3,tension:.35,hidden:false};
+  });
+  var chartGruposTotal=new Chart(ctx3,{
+    type:"line",
+    data:{labels:meses,datasets:dsGruposTotal},
+    options:{responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:24}},
+      plugins:{
+        legend:{
+          position:"bottom",
+          labels:{font:{size:10},boxWidth:12,padding:10},
+          onClick:function(e,item,legend){
+            var idx=item.datasetIndex;
+            var meta=chartGruposTotal.getDatasetMeta(idx);
+            meta.hidden=!meta.hidden;
+            chartGruposTotal.update();
+          }
+        },
+        tooltip:{mode:"index",intersect:false}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:10},maxRotation:0}},
+        y:{grid:{color:"rgba(0,0,0,.04)"},ticks:{font:{size:10}},afterFit:function(s){s.width=40;}}
+      }
+    },
+    plugins:[{
+      id:'datalabels-grupos-total',
+      afterDatasetsDraw:function(chart){
+        var ctx=chart.ctx;
+        chart.data.datasets.forEach(function(ds,di){
+          var meta=chart.getDatasetMeta(di);
+          if(meta.hidden)return;
+          ctx.save();
+          ctx.font='bold 9px Plus Jakarta Sans,sans-serif';
+          ctx.textAlign='center';ctx.textBaseline='bottom';
+          meta.data.forEach(function(point,i){
+            var val=ds.data[i];
+            if(val==null||val===0)return;
+            if(i%2!==0)return;
+            ctx.fillStyle=ds.borderColor||'#333';
+            ctx.fillText(val,point.x,point.y-5);
+          });
+          ctx.restore();
+        });
+      }
+    }]
+  });
+
+  // Toggle buttons for total chart
+  var toggleTotalHtml='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 0 0;">';
+  gruposKeys.forEach(function(g,i){
+    var cor=COLORS[i%COLORS.length];
+    toggleTotalHtml+='<button onclick="toggleGrupoTotal('+i+')" id="btn-grt-'+i+'" style="'+
+      'background:'+cor+';color:#fff;border:none;padding:3px 10px;border-radius:20px;'+
+      'font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;opacity:1;">'+g+'</button>';
+  });
+  toggleTotalHtml+='</div>';
+  document.getElementById("toggle-grupos-total").innerHTML=toggleTotalHtml;
+
   // Retenção removida
 
   // Ranking
@@ -466,6 +537,14 @@ function initCharts(){
   // ov-charts visibility controlled by parent pg-ov
 }
 
+function toggleGrupoTotal(idx){
+  if(!chartGruposTotal)return;
+  var meta=chartGruposTotal.getDatasetMeta(idx);
+  meta.hidden=!meta.hidden;
+  chartGruposTotal.update();
+  var btn=document.getElementById("btn-grt-"+idx);
+  if(btn)btn.style.opacity=meta.hidden?"0.35":"1";
+}
 function toggleGrupo(idx){
   if(!chartGrupos)return;
   var meta=chartGrupos.getDatasetMeta(idx);
