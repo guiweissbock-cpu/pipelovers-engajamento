@@ -472,6 +472,10 @@ td{padding:10px 12px;font-size:12px;border-bottom:1px solid var(--g100);vertical
 .cls{cursor:pointer;color:var(--g400);font-size:18px;line-height:1;}.cls:hover{color:var(--g700);}
 .ibox{border-radius:var(--r);padding:12px 16px;margin-bottom:16px;font-size:13px;font-weight:500;}
 .ibox-p{background:var(--pl);border:1.5px solid var(--pb);color:var(--pur);}.ibox-y{background:var(--yl);border:1.5px solid var(--yb);color:var(--yel);}
+.ck-group{display:flex;flex-direction:column;gap:4px;padding:4px 0;}
+.ck-lbl{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--g600);cursor:pointer;white-space:nowrap;}
+.ck-lbl input[type=checkbox]{width:14px;height:14px;accent-color:var(--sky);cursor:pointer;flex-shrink:0;}
+.ck-lbl:hover{color:var(--mid);}
 ::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--g200);border-radius:3px;}
 </style>'''
 
@@ -508,7 +512,20 @@ pop("na-csm",[...new Set(NV.map(function(u){return u.csm;}).filter(Boolean))].so
 var ovF=null;
 function runOv(){
   var co=document.getElementById("ov-co").value,csm=document.getElementById("ov-csm").value;
-  var fd=U.filter(function(u){if(co&&u.company!==co)return false;if(csm&&u.csm!==csm)return false;return true;});
+  var crChecked=[...document.querySelectorAll(".ov-cr:checked")].map(function(c){return c.value;});
+  var fd=U.filter(function(u){
+    if(co&&u.company!==co)return false;
+    if(csm&&u.csm!==csm)return false;
+    if(crChecked.length>0){
+      var noDate=!u.created_at;
+      var m=noDate?-1:mSince(u.created_at);
+      var lt3=!noDate&&m<3,is3to6=!noDate&&m>=3&&m<=6,gt6=!noDate&&m>6;
+      var ok=(crChecked.indexOf("lt3")>=0&&lt3)||(crChecked.indexOf("3to6")>=0&&is3to6)||
+             (crChecked.indexOf("gt6")>=0&&gt6)||(crChecked.indexOf("nodate")>=0&&noDate);
+      if(!ok)return false;
+    }
+    return true;
+  });
   var tot=fd.length,aM=fd.filter(function(u){return u.active_this_month;}).length;
   var off=fd.filter(function(u){return u.flag==="offensive";});
   var yel=fd.filter(function(u){return u.flag==="yellow";});
@@ -554,7 +571,13 @@ function runOv(){
 function togOv(g){ovF=(ovF===g)?null:g;runOv();}
 document.getElementById("ov-co").addEventListener("change",runOv);
 document.getElementById("ov-csm").addEventListener("change",runOv);
-document.getElementById("ov-rst").addEventListener("click",function(){document.getElementById("ov-co").value="";document.getElementById("ov-csm").value="";ovF=null;runOv();});
+document.querySelectorAll(".ov-cr").forEach(function(c){c.addEventListener("change",runOv);});
+document.getElementById("ov-rst").addEventListener("click",function(){
+  document.getElementById("ov-co").value="";
+  document.getElementById("ov-csm").value="";
+  document.querySelectorAll(".ov-cr").forEach(function(c){c.checked=false;});
+  ovF=null;runOv();
+});
 var selCo=null;
 function runEm(){
   var q=document.getElementById("em-q").value.toLowerCase(),csm=document.getElementById("em-csm").value;
@@ -734,6 +757,15 @@ runOv();runEm();runUs();runNa();runNf();runOr();'''
   <div class="fbar">
     <div class="fg"><div class="fl">Empresa</div><select id="ov-co"><option value="">Todas</option></select></div>
     <div class="fg"><div class="fl">CSM</div><select id="ov-csm"><option value="">Todos</option></select></div>
+    <div class="fg">
+      <div class="fl">Cria&ccedil;&atilde;o do usu&aacute;rio</div>
+      <div class="ck-group">
+        <label class="ck-lbl"><input type="checkbox" class="ov-cr" value="lt3"> Menos de 3 meses</label>
+        <label class="ck-lbl"><input type="checkbox" class="ov-cr" value="3to6"> 3 a 6 meses</label>
+        <label class="ck-lbl"><input type="checkbox" class="ov-cr" value="gt6"> Mais de 6 meses</label>
+        <label class="ck-lbl"><input type="checkbox" class="ov-cr" value="nodate"> Sem data</label>
+      </div>
+    </div>
     <button class="btnf" id="ov-rst">Limpar</button>
   </div>
   <div id="ov-body"></div>
