@@ -129,15 +129,12 @@ td{padding:10px 12px;font-size:12px;border-bottom:1px solid var(--g100);vertical
     </div>
 
   </div>
-  <div class="charts-grid">
+  <div class="charts-grid" style="grid-template-columns:1fr;">
     <div class="chart-section" style="margin:0;">
       <div class="chart-title">Evolução por grupo</div>
       <div class="chart-canvas-wrap" style="height:240px;"><canvas id="chart-grupos"></canvas></div>
     </div>
-    <div class="chart-section" style="margin:0;">
-      <div class="chart-title">Top empresas (últimos 3 meses) <span style="font-size:10px;color:var(--g400);font-weight:400;">por nº de aulas</span></div>
-      <div class="rank-list" id="rank-body"></div>
-    </div>
+
   </div>
 <div style="padding:0 24px 20px;">
   <div class="chart-section" style="margin:0;">
@@ -400,24 +397,7 @@ function updateChartsFiltered(fd){
   });
   chartGrupos.update();
 
-  // Update ranking
-  var empAulas={};
-  fd.forEach(function(u){
-    if(!u.monthly)return;
-    var tot=Object.values(u.monthly).reduce(function(a,b){return a+b;},0);
-    if(tot>0){empAulas[u.company]=(empAulas[u.company]||0)+tot;}
-  });
-  var ranked=Object.entries(empAulas).sort(function(a,b){return b[1]-a[1];}).slice(0,12);
-  var maxA=ranked[0]?ranked[0][1]:1;
-  var rankHtml="";
-  ranked.forEach(function(r,i){
-    var w=Math.round(r[1]/maxA*100);
-    rankHtml+="<div class=\"rank-row\"><span class=\"rank-num\">"+(i+1)+"</span>"+
-      "<span class=\"rank-name\">"+esc(r[0])+"</span>"+
-      "<div class=\"rank-bar-wrap\"><div class=\"rank-bar-fill\" style=\"width:"+w+"%\"></div></div>"+
-      "<span class=\"rank-val\">"+r[1]+"</span></div>";
-  });
-  if(document.getElementById("rank-body"))document.getElementById("rank-body").innerHTML=rankHtml;
+
 }
 function runOv(){
   var co=document.getElementById("ov-co").value,csm=document.getElementById("ov-csm").value;
@@ -708,17 +688,7 @@ function initCharts(){
 
   // Retenção removida
 
-  // Ranking
-  var maxAulas=CHARTS.ranking[0][1];
-  var rankHtml="";
-  CHARTS.ranking.slice(0,12).forEach(function(r,i){
-    var w=Math.round(r[1]/maxAulas*100);
-    rankHtml+="<div class=\"rank-row\"><span class=\"rank-num\">"+(i+1)+"</span>"+
-      "<span class=\"rank-name\">"+r[0]+"</span>"+
-      "<div class=\"rank-bar-wrap\"><div class=\"rank-bar-fill\" style=\"width:"+w+"%\"></div></div>"+
-      "<span class=\"rank-val\">"+r[1]+"</span></div>";
-  });
-  document.getElementById("rank-body").innerHTML=rankHtml;
+  // Ranking removido temporariamente
 
   // ov-charts visibility controlled by parent pg-ov
 }
