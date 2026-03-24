@@ -285,13 +285,12 @@ td{padding:10px 12px;font-size:12px;border-bottom:1px solid var(--g100);vertical
     <div class="fg"><div class="fl">CSM</div><select id="cx-csm" style="min-width:130px;"><option value="">Todos</option></select></div>
     <div class="fg"><div class="fl">Empresa</div><select id="cx-co" style="min-width:150px;"><option value="">Todas</option></select></div>
     <div class="fg"><div class="fl">Tempo de cadastro</div>
-      <select id="cx-tenure" style="min-width:160px;">
-        <option value="">Todos</option>
-        <option value="lt3">Menos de 3 meses</option>
-        <option value="3to6">3 a 6 meses</option>
-        <option value="gt6">Mais de 6 meses</option>
-        <option value="nodate">Sem data</option>
-      </select>
+      <div class="ck-group">
+        <label class="ck-lbl"><input type="checkbox" class="cx-tenure" value="lt3"> &lt;3 meses</label>
+        <label class="ck-lbl"><input type="checkbox" class="cx-tenure" value="3to6"> 3-6 meses</label>
+        <label class="ck-lbl"><input type="checkbox" class="cx-tenure" value="gt6"> +6 meses</label>
+        <label class="ck-lbl"><input type="checkbox" class="cx-tenure" value="nodate"> Sem data</label>
+      </div>
     </div>
     <button class="btnf" id="cx-rst">Limpar</button>
   </div>
@@ -1107,23 +1106,24 @@ runOv();runEm();runUs();runNa();runNf();runOr();
     var q=(_q?_q.value:'').toLowerCase();
     var csm=_csm?_csm.value:'';
     var co=_co?_co.value:'';
-    var _ten=document.getElementById('cx-tenure');
-    var tenure=_ten?_ten.value:'';
+    var tenChecked=[...document.querySelectorAll('.cx-tenure:checked')].map(function(c){return c.value;});
     var now=new Date();
     return arr.filter(function(u){
       if(q && u.name.toLowerCase().indexOf(q)<0 && u.email.toLowerCase().indexOf(q)<0 && u.company.toLowerCase().indexOf(q)<0) return false;
       if(csm && u.csm!==csm) return false;
       if(co && u.company!==co) return false;
-      if(tenure){
+      if(tenChecked.length>0){
         var ca=u.created_at;
-        if(tenure==='nodate'){if(ca)return false;}
-        else if(!ca){return false;}
-        else{
+        var matched=tenChecked.some(function(t){
+          if(t==='nodate') return !ca;
+          if(!ca) return false;
           var months=(now.getFullYear()-parseInt(ca.slice(0,4)))*12+(now.getMonth()-(parseInt(ca.slice(5,7))-1));
-          if(tenure==='lt3'  && months>=3)  return false;
-          if(tenure==='3to6' && (months<3||months>6)) return false;
-          if(tenure==='gt6'  && months<=6)  return false;
-        }
+          if(t==='lt3')  return months<3;
+          if(t==='3to6') return months>=3&&months<=6;
+          if(t==='gt6')  return months>6;
+          return false;
+        });
+        if(!matched) return false;
       }
       return true;
     });
@@ -1221,7 +1221,7 @@ runOv();runEm();runUs();runNa();runNf();runOr();
 
   // Wire filters - safe init, only run when cx tab is active
   function initKbFilters(){
-    ['cx-q','cx-csm','cx-co','cx-tenure'].forEach(function(id){
+    ['cx-q','cx-csm','cx-co'].forEach(function(id){
       var el=document.getElementById(id);
       if(el && !el._kbWired){
         el.addEventListener(el.tagName==='SELECT'?'change':'input',renderBoard);
@@ -1237,11 +1237,14 @@ runOv();runEm();runUs();runNa();runNf();runOr();
         if(q)q.value='';
         if(csm)csm.value='';
         if(co)co.value='';
-        var ten=document.getElementById('cx-tenure');if(ten)ten.value='';
+        document.querySelectorAll('.cx-tenure').forEach(function(cb){cb.checked=false;});
         renderBoard();
       });
       rst._kbWired=true;
     }
+    document.querySelectorAll('.cx-tenure').forEach(function(cb){
+      if(!cb._kbWired){cb.addEventListener('change',renderBoard);cb._kbWired=true;}
+    });
   }
 
   // renderBoard is called directly from goTab
