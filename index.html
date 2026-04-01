@@ -722,7 +722,7 @@ function runOv(){
   var fd=U.filter(function(u){
     if(co&&u.company!==co)return false;
     if(csm&&u.csm!==csm)return false;
-    if(!userInPeriod(u,periodo))return false;
+    // Note: period filter only affects KPI counts, NOT which users appear in fd
     if(crChecked.length>0){
       var noDate=!u.created_at;
       var m=noDate?-1:mSince(u.created_at);
@@ -733,12 +733,25 @@ function runOv(){
     }
     return true;
   });
-  var tot=fd.length;
   var _pc=getPeriodo();
+  // tot = total users (ignore period filter for total count)
+  var _fdNoPeriod=U.filter(function(u){
+    if(co&&u.company!==co)return false;
+    if(csm&&u.csm!==csm)return false;
+    if(crChecked.length>0){
+      var noDate=!u.created_at;
+      var m2=noDate?-1:mSince(u.created_at);
+      var lt3=!noDate&&m2<3,is3to6=!noDate&&m2>=3&&m2<=6,gt6=!noDate&&m2>6;
+      var ok=(crChecked.indexOf("lt3")>=0&&lt3)||(crChecked.indexOf("3to6")>=0&&is3to6)||
+             (crChecked.indexOf("gt6")>=0&&gt6)||(crChecked.indexOf("nodate")>=0&&noDate);
+      if(!ok)return false;
+    }
+    return true;
+  });
+  var tot=_fdNoPeriod.length;
   var aM;
   if(_pc.de||_pc.ate){
-    // Count users who consumed in the selected period
-    aM=fd.filter(function(u){return inPeriodoConsumo(u,_pc);}).length;
+    aM=_fdNoPeriod.filter(function(u){return inPeriodoConsumo(u,_pc);}).length;
   } else {
     aM=fd.filter(function(u){return u.active_this_month;}).length;
   }
@@ -1206,7 +1219,7 @@ function filterByPeriods(u,prefix){
 function runEm(){
   wirePeriodoTab("em",runEm);
   var q=document.getElementById("em-q").value.toLowerCase(),csm=document.getElementById("em-csm").value;
-  var pc=calcPeriodo("em","pc"),cr2=calcPeriodo("em","cr2");
+  var emPc=calcPeriodo("em","pc"),emCr2=calcPeriodo("em","cr2");
   var fd=C.filter(function(c){
     if(q&&c.empresa.toLowerCase().indexOf(q)<0)return false;
     if(csm&&c.csm!==csm)return false;
@@ -1221,8 +1234,8 @@ function runEm(){
     // Recalculate active_m for current period
     var _emUsers=U.filter(function(u){return u.company===co.empresa;});
     var _emActive=_emUsers.filter(function(u){
-      if(!pc.de&&!pc.ate) return u.active_this_month;
-      return inPeriodoConsumo(u,pc);
+      if(pc.de||pc.ate) return inPeriodoConsumo(u,pc);
+      return u.days_inactive!==null&&u.days_inactive<31;
     }).length;
     var _emTotal=co.total||_emUsers.length;
     var p=pct(_emActive,_emTotal);
