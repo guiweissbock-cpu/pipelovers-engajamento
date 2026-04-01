@@ -1429,42 +1429,136 @@ runOv();runEm();runUs();runNa();runNf();runOr();
     });
   }
 
-  function renderBoard(){populateKbFilters();initKbFilters();wirePeriodoTab('cx',renderBoard);
-    var board=document.getElementById('kb-board');
-    board.innerHTML='';
-    COLS.forEach(function(col){
-      var cards=getFiltered(KB[col.key]||[]);
-      var colEl=document.createElement('div');
-      colEl.className='kb-col';
-      var hdr='<div class="kb-hdr">'+
-        '<div class="kb-hdr-top">'+
-          '<span class="kb-title" style="color:'+col.color+'">'+esc(col.title)+'</span>'+
-          '<span class="kb-count">'+cards.length+'</span>'+
-        '</div>'+
-        '<div class="kb-sub">'+esc(col.sub)+'</div>'+
-      '</div>';
-      var body='<div class="kb-body">';
-      var shown=cards.slice(0,80);
-      shown.forEach(function(u,i){
-        var flagCol=FLAG_COL[u.flag]||'#94a3b8';
-        body+='<div class="kb-card" data-col="'+esc(col.key)+'" data-idx="'+i+'" onclick="showKbModal(\''+esc(col.key)+'\','+i+',this)">'+
-          '<div class="kb-name">'+esc(u.name)+'</div>'+
-          '<div class="kb-email">'+esc(u.email)+'</div>'+
-          '<div class="kb-meta">'+
-            '<span class="kb-co">'+esc(u.company)+'</span>'+
-            '<span class="kb-csm">'+esc(u.csm)+'</span>'+
-            '<span class="kb-flag-dot" style="background:'+flagCol+'" title="'+esc(u.flag)+'"></span>'+
-          '</div>'+
-        '</div>';
+  function renderBoard(){
+  populateKbFilters();initKbFilters();wirePeriodoTab('cx',renderBoard);
+  var board=document.getElementById('kb-board');
+  board.innerHTML='';
+
+  // Get period filter
+  var pc=calcPeriodo('cx','pc');
+  var hasPeriod=!!(pc.de||pc.ate);
+
+  // All KB cards flattened (respecting CSM/empresa/criacao filters but not consumption column)
+  var allCards=Object.values(KB).flat();
+
+  // Apply non-consumption filters (search, csm, company, creation date)
+  var _q=document.getElementById('cx-q');
+  var _csm=document.getElementById('cx-csm');
+  var _co=document.getElementById('cx-co');
+  var q=(_q?_q.value:'').toLowerCase();
+  var csm=_csm?_csm.value:'';
+  var co=_co?_co.value:'';
+  var cr2=calcPeriodo('cx','cr2');
+  var tenChecked=[...document.querySelectorAll('.cx-tenure:checked')].map(function(c){return c.value;});
+  var now=new Date();
+
+  var baseFiltered=allCards.filter(function(u){
+    if(q && u.name.toLowerCase().indexOf(q)<0 && u.email.toLowerCase().indexOf(q)<0 && u.company.toLowerCase().indexOf(q)<0) return false;
+    if(csm && u.csm!==csm) return false;
+    if(co && u.company!==co) return false;
+    if(!inPeriodoCriacao(u,cr2)) return false;
+    if(tenChecked.length>0){
+      var ca=u.created_at;
+      var matched=tenChecked.some(function(t){
+        if(t==='nodate') return !ca;
+        if(!ca) return false;
+        var months=(now.getFullYear()-parseInt(ca.slice(0,4)))*12+(now.getMonth()-(parseInt(ca.slice(5,7))-1));
+        if(t==='lt3')  return months<3;
+        if(t==='3to6') return months>=3&&months<=6;
+        if(t==='gt6')  return months>6;
+        return false;
       });
-      if(cards.length>80){
-        body+='<div style="text-align:center;padding:8px;font-size:11px;color:var(--g400);">+' + (cards.length-80) + ' mais — use os filtros para refinar</div>';
-      }
-      body+='</div>';
-      colEl.innerHTML=hdr+body;
-      board.appendChild(colEl);
+      if(!matched) return false;
+    }
+    return true;
+  });
+
+  // Count aulas in the period for each user
+  function aulasNoPeriodo(u){
+    if(!hasPeriod) return u.aulas_mes||0;
+    var monthly=u.monthly||{};
+    var total=0;
+    Object.keys(monthly).forEach(function(m){
+      if((!pc.de||m>=pc.de)&&(!pc.ate||m<=pc.ate)) total+=monthly[m]||0;
+    });
+    return total;
+  }
+
+  // Bucket users by aulas in period
+  var buckets={tres_mais:[],dois:[],um:[],zero_mes:[],nunca:[]};
+  baseFiltered.forEach(function(u){
+    if(!inPeriodoConsumo(u,pc)){return;} // skip if outside consumption period
+    var aulas=aulasNoPeriodo(u);
+    if(u.total_consumed===0) buckets.nunca.push(u);
+    else if(aulas>=3) buckets.tres_mais.push(u);
+    else if(aulas===2) buckets.dois.push(u);
+    else if(aulas===1) buckets.um.push(u);
+    else buckets.zero_mes.push(u);
+  });
+  // Also add users with no consumption in period to zero_mes (if not filtering by period)
+  if(!hasPeriod){
+    // Use pre-built buckets but apply base filters
+    Object.keys(buckets).forEach(function(k){
+      buckets[k]=getFiltered(KB[k]||[]).filter(function(u){
+        return baseFiltered.some(function(b){return b.email===u.email;});
+      });
     });
   }
+
+  // Period label for column titles
+  var periodLabel=hasPeriod?(' no período'):'este mês';
+
+  var COLS_DYN=[
+    {key:'tres_mais', title:'3+ aulas'+periodLabel,  sub:'Engajados',         color:'#059669'},
+    {key:'dois',      title:'2 aulas'+periodLabel,    sub:'Bom engajamento',   color:'#2563b0'},
+    {key:'um',        title:'1 aula'+periodLabel,     sub:'Engajamento baixo', color:'#d97706'},
+    {key:'zero_mes',  title:'Não assistiu'+periodLabel,sub:'Atenção necessária',color:'#dc2626'},
+    {key:'nunca',     title:'Nunca assistiu',          sub:'Sem engajamento',   color:'#334155'},
+  ];
+
+  COLS_DYN.forEach(function(col){
+    var cards=buckets[col.key]||[];
+    var colEl=document.createElement('div');
+    colEl.className='kb-col';
+    var hdr='<div class="kb-hdr">'+
+      '<div class="kb-hdr-top">'+
+        '<span class="kb-title" style="color:'+col.color+'">'+esc(col.title)+'</span>'+
+        '<span class="kb-count">'+cards.length+'</span>'+
+      '</div>'+
+      '<div class="kb-sub">'+esc(col.sub)+'</div>'+
+    '</div>';
+    var body='<div class="kb-body">';
+    var shown=cards.slice(0,80);
+    shown.forEach(function(u,i){
+      var flagCol=FLAG_COL[u.flag]||'#94a3b8';
+      body+='<div class="kb-card" data-col="'+esc(col.key)+'" data-idx="'+i+'">'+
+        '<div class="kb-name">'+esc(u.name)+'</div>'+
+        '<div class="kb-email">'+esc(u.email)+'</div>'+
+        '<div class="kb-meta">'+
+          '<span class="kb-co">'+esc(u.company)+'</span>'+
+          '<span class="kb-csm">'+esc(u.csm)+'</span>'+
+          '<span class="kb-flag-dot" style="background:'+flagCol+'" title="'+esc(u.flag)+'"></span>'+
+        '</div>'+
+      '</div>';
+    });
+    if(cards.length>80){
+      body+='<div style="text-align:center;padding:8px;font-size:11px;color:var(--g400);">+'+(cards.length-80)+' mais — use os filtros para refinar</div>';
+    }
+    body+='</div>';
+    colEl.innerHTML=hdr+body;
+    board.appendChild(colEl);
+  });
+
+  // Event delegation for card clicks
+  board.addEventListener('click',function(ev){
+    var card=ev.target.closest?ev.target.closest('.kb-card'):null;
+    if(!card)return;
+    var colKey=card.getAttribute('data-col');
+    var cidx=parseInt(card.getAttribute('data-idx'),10);
+    showKbModal(colKey,cidx,card);
+  });
+  window._kbBuckets=buckets;
+}
 
   window._kbFiltered=function(colKey){
     return getFiltered(KB[colKey]||[]);
@@ -1475,7 +1569,7 @@ runOv();runEm();runUs();runNa();runNf();runOr();
     document.querySelectorAll('.kb-card.sel').forEach(function(c){c.classList.remove('sel');});
     if(cardEl)cardEl.classList.add('sel');
 
-    var cards=window._kbFiltered(colKey);
+    var cards=(window._kbBuckets&&window._kbBuckets[colKey])||window._kbFiltered(colKey)||[];
     var u=cards[idx];
     if(!u)return;
 
