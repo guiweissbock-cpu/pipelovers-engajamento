@@ -733,7 +733,15 @@ function runOv(){
     }
     return true;
   });
-  var tot=fd.length,aM=fd.filter(function(u){return u.active_this_month;}).length;
+  var tot=fd.length;
+  var _pc=getPeriodo();
+  var aM;
+  if(_pc.de||_pc.ate){
+    // Count users who consumed in the selected period
+    aM=fd.filter(function(u){return inPeriodoConsumo(u,_pc);}).length;
+  } else {
+    aM=fd.filter(function(u){return u.active_this_month;}).length;
+  }
   // Update charts based on filtered users
   updateChartsFiltered(fd);
   var off=fd.filter(function(u){return u.flag==="offensive";});
@@ -742,7 +750,7 @@ function runOv(){
   var blk=fd.filter(function(u){return u.flag==="black";});
   var kpis=[
     {lbl:"Total Usu\xE1rios",    val:tot,       sub:"empresas ativas",              cls:"c-b",grp:null},
-    {lbl:"Ativos este m\xEAs",   val:aM,        sub:pct(aM,tot)+"% do total",       cls:"c-g",grp:"active"},
+    {lbl:(_pc.de||_pc.ate)?"Ativos no per\xEDodo":"Ativos este m\xEAs", val:aM, sub:pct(aM,tot)+"% do total", cls:"c-g",grp:"active"},
     {lbl:"&#128293; Ofensiva",   val:off.length,sub:"ativos nos 2 \xFAltimos meses",cls:"c-o",grp:"offensive"},
     {lbl:"&#128993; Yellow",     val:yel.length,sub:"inativos 30-60 dias",          cls:"c-y",grp:"yellow"},
     {lbl:"&#128308; Red",        val:red.length,sub:"inativos 60-90 dias",          cls:"c-r",grp:"red"},
@@ -1210,7 +1218,14 @@ function runEm(){
   });
   document.getElementById("em-ctag").textContent=fd.length+" empresas";
   var cards=fd.map(function(co,idx){
-    var p=pct(co.active_m,co.total);
+    // Recalculate active_m for current period
+    var _emUsers=U.filter(function(u){return u.company===co.empresa;});
+    var _emActive=_emUsers.filter(function(u){
+      if(!pc.de&&!pc.ate) return u.active_this_month;
+      return inPeriodoConsumo(u,pc);
+    }).length;
+    var _emTotal=co.total||_emUsers.length;
+    var p=pct(_emActive,_emTotal);
     var fc=p>=70?"var(--green)":p>=40?"var(--yel)":"var(--red)";
     var pc2=p>=70?"p-g":p>=40?"p-y":"p-r";
     var isSel=(selCo===idx)?" sel":"";
@@ -1475,8 +1490,8 @@ runOv();runEm();runUs();runNa();runNf();runOr();
 
   // Count aulas in the period for each user
   function aulasNoPeriodo(u){
-    if(!hasPeriod) return u.aulas_mes||0;
     var monthly=u.monthly||{};
+    if(!pc.de&&!pc.ate) return u.aulas_mes||0;
     var total=0;
     Object.keys(monthly).forEach(function(m){
       if((!pc.de||m>=pc.de)&&(!pc.ate||m<=pc.ate)) total+=monthly[m]||0;
@@ -1487,23 +1502,17 @@ runOv();runEm();runUs();runNa();runNf();runOr();
   // Bucket users by aulas in period
   var buckets={tres_mais:[],dois:[],um:[],zero_mes:[],nunca:[]};
   baseFiltered.forEach(function(u){
-    if(!inPeriodoConsumo(u,pc)){return;} // skip if outside consumption period
+    if(u.total_consumed===0){
+      buckets.nunca.push(u);
+      return;
+    }
     var aulas=aulasNoPeriodo(u);
-    if(u.total_consumed===0) buckets.nunca.push(u);
-    else if(aulas>=3) buckets.tres_mais.push(u);
+    if(aulas>=3) buckets.tres_mais.push(u);
     else if(aulas===2) buckets.dois.push(u);
     else if(aulas===1) buckets.um.push(u);
-    else buckets.zero_mes.push(u);
+    else buckets.zero_mes.push(u); // consumed historically but not in period
   });
-  // Also add users with no consumption in period to zero_mes (if not filtering by period)
-  if(!hasPeriod){
-    // Use pre-built buckets but apply base filters
-    Object.keys(buckets).forEach(function(k){
-      buckets[k]=getFiltered(KB[k]||[]).filter(function(u){
-        return baseFiltered.some(function(b){return b.email===u.email;});
-      });
-    });
-  }
+
 
   // Period label for column titles
   var periodLabel=hasPeriod?(' no período'):'este mês';
