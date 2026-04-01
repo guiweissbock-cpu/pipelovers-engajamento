@@ -1218,12 +1218,13 @@ function filterByPeriods(u,prefix){
 
 function runEm(){
   wirePeriodoTab("em",runEm);
+  selCo=null; // reset detail panel on each filter change
   var q=document.getElementById("em-q").value.toLowerCase(),csm=document.getElementById("em-csm").value;
   var emPc=calcPeriodo("em","pc"),emCr2=calcPeriodo("em","cr2");
   var fd=C.filter(function(c){
     if(q&&c.empresa.toLowerCase().indexOf(q)<0)return false;
     if(csm&&c.csm!==csm)return false;
-    if(pc.de||pc.ate||cr2.de||cr2.ate){
+    if(emPc.de||emPc.ate||emCr2.de||emCr2.ate){
       var users=U.filter(function(u){return u.company===c.empresa;});
       if(!users.some(function(u){return filterByPeriods(u,"em");}))return false;
     }
@@ -1234,7 +1235,7 @@ function runEm(){
     // Recalculate active_m for current period
     var _emUsers=U.filter(function(u){return u.company===co.empresa;});
     var _emActive=_emUsers.filter(function(u){
-      if(pc.de||pc.ate) return inPeriodoConsumo(u,pc);
+      if(emPc.de||emPc.ate) return inPeriodoConsumo(u,emPc);
       return u.days_inactive!==null&&u.days_inactive<31;
     }).length;
     var _emTotal=co.total||_emUsers.length;
@@ -1247,11 +1248,11 @@ function runEm(){
       '<span class="pill '+pc2+'">'+p+'%</span></div>'+
       '<div class="co-bar"><div class="co-bf" style="width:'+p+'%;background:'+fc+'"></div></div>'+
       '<div class="co-stats">'+
-        '<span class="cos"><span class="dot d-o"></span>'+co.offensive+'</span>'+
-        '<span class="cos"><span class="dot d-g"></span>'+co.green+'</span>'+
-        '<span class="cos"><span class="dot d-y"></span>'+co.yellow+'</span>'+
-        '<span class="cos"><span class="dot d-r"></span>'+co.red+'</span>'+
-        '<span class="cos"><span class="dot d-k"></span>'+co.black+'</span>'+
+        '<span class="cos"><span class="dot d-o"></span>'+(co.offensive||0)+'</span>'+
+        '<span class="cos"><span class="dot d-g"></span>'+(co.green||0)+'</span>'+
+        '<span class="cos"><span class="dot d-y"></span>'+(co.yellow||0)+'</span>'+
+        '<span class="cos"><span class="dot d-r"></span>'+(co.red||0)+'</span>'+
+        '<span class="cos"><span class="dot d-k"></span>'+(co.black||0)+'</span>'+
         '<span style="font-size:10px;color:var(--g400);margin-left:auto;">'+co.total+' usu\xE1rios</span>'+
       '</div></div>';
   }).join('');
