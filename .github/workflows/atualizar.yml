@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "consumo.csv"
+      - "consumo_cursa.csv"
       - "clientes.csv"
       - "usuarios.csv"
       - "nao_iniciou.csv"
