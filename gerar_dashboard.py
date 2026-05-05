@@ -347,16 +347,15 @@ def processar():
         if email in user_map:
             for mes in user_map[email]['monthly']:
                 mes_ativos2[mes].add(email)
-    # Para grupos, precisamos do product_name — re-scan consumo para ativos
-    with open(p_consumo, encoding='utf-8') as f:
-        for row in csv.DictReader(f):
-            em = row.get('user_email','').strip().lower()
-            if em not in emails_ativos: continue
-            d = row.get('first_consumed_at','')
-            mes = d[:7] if d else ''
-            if mes:
-                grupo = get_grupo(row.get('product_name',''))
-                mes_grupo_ativos2[mes][grupo].add(em)
+    # Para grupos, precisamos do product_name — iterar sobre _all_rows (Hubla + Cursa)
+    for _norm in _all_rows:
+        em = _norm['email']
+        if em not in emails_ativos: continue
+        dt = _norm['dt']
+        if dt:
+            mes = dt.strftime('%Y-%m')
+            grupo = get_grupo(_norm['product_name'])
+            mes_grupo_ativos2[mes][grupo].add(em)
 
     # ── Dados dos gráficos ──
     all_meses = sorted(set(list(mes_total.keys()) + list(mes_ativos2.keys())))
@@ -383,20 +382,25 @@ def processar():
         key=lambda x:-x[1]
     )[:15]
 
-    # Aulas totais por mês
+  # Aulas totais por mês — iterar sobre _all_rows (Hubla + Cursa)
     from collections import defaultdict as _dd
     mes_aulas_total_d  = _dd(int)
     mes_aulas_ativos_d = _dd(int)
-    _p_consumo = encontrar_csv(CONSUMO_CSV, ['consumo','pipelovers_b2b','consumption'])
-    with open(_p_consumo, encoding='utf-8') as _f:
-        for _row in csv.DictReader(_f):
-            _em = _row.get('user_email','').strip().lower()
-            _d  = _row.get('first_consumed_at','')
-            _mes = _d[:7] if _d else ''
-            if not _mes: continue
-            mes_aulas_total_d[_mes] += 1
-            if _em in emails_ativos:
-                mes_aulas_ativos_d[_mes] += 1
+    for _norm in _all_rows:
+        _em = _norm['email']
+        _dt = _norm['dt']
+        if not _dt: continue
+        _mes = _dt.strftime('%Y-%m')
+        mes_aulas_total_d[_mes] += 1
+        if _em in emails_ativos:
+            mes_aulas_ativos_d[_mes] += 1
+
+    # email -> [iso_date_str, ...] (Hubla + Cursa) para alimentar histórico em gerar_html
+    _consumo_datas_por_email_dict = defaultdict(list)
+    for _norm in _all_rows:
+        if _norm['email'] and _norm['dt']:
+            _consumo_datas_por_email_dict[_norm['email']].append(_norm['dt'].isoformat())
+    _consumo_datas_por_email_dict = dict(_consumo_datas_por_email_dict)
 
     evolucao_aulas_total  = [mes_aulas_total_d.get(m, 0)  for m in meses_sorted]
     evolucao_aulas_ativos = [mes_aulas_ativos_d.get(m, 0) for m in meses_sorted]
@@ -411,6 +415,7 @@ def processar():
         'retencao':              retencao,
         'evolucao_aulas_total':  evolucao_aulas_total,
         'evolucao_aulas_ativos': evolucao_aulas_ativos,
+        '_consumo_datas_por_email': _consumo_datas_por_email_dict,
     }
 
     # ── Companies ──
@@ -540,15 +545,11 @@ def gerar_html(users_list, company_list, never_list, not_found_list, orphan_user
         if mes == 12: return datetime(ano+1,1,1,23,59,59,tzinfo=timezone.utc) - timedelta(seconds=1)
         return datetime(ano,mes+1,1,23,59,59,tzinfo=timezone.utc) - timedelta(seconds=1)
 
-    # email -> lista de datetimes de consumo
-    _p_consumo = encontrar_csv(CONSUMO_CSV, ['consumo','pipelovers_b2b','consumption'])
+# email -> lista de datetimes de consumo (Hubla + Cursa, vindo de processar() via charts_data)
     _email_datas = defaultdict(list)
-    with open(_p_consumo, encoding='utf-8') as _f:
-        for _row in csv.DictReader(_f):
-            _em = _row.get('user_email','').strip().lower()
-            _d  = _row.get('first_consumed_at','')
-            if not _em or not _d: continue
-            try: _email_datas[_em].append(datetime.fromisoformat(_d.replace('Z','+00:00')))
+    for _em, _datas in charts_data.get('_consumo_datas_por_email', {}).items():
+        for _d in _datas:
+            try: _email_datas[_em].append(datetime.fromisoformat(_d))
             except: pass
 
     # Base total = todos os emails vistos no consumo + usuarios
