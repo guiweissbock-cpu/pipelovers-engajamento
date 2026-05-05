@@ -229,6 +229,8 @@ def processar():
             _delim = ','
         with open(path, encoding='utf-8-sig') as f:
             for row in csv.DictReader(f, delimiter=_delim):
+              # Pular importações em lote do Cursa (backfill da migração que duplica linhas da Hubla)
+                if source == 'cursa' and row.get('Origem','').strip() == 'Importação em lote': continue
                 n = _normalize_row(row, source)
                 if n['email'] and '@' in n['email']:
                     rows_out.append(n)
