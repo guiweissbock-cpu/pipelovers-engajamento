@@ -195,11 +195,13 @@ def processar():
                 company = _email_to_company_pre.get(email, '')
             # product_name from Turmas if it's a group keyword
             product = turma if turma in _GRUPOS_TURMA else ''
-            # date: ONLY use Data de início (real consumption date)
-            # Data da compra = date of import/purchase, NOT actual consumption
-            # Rows without Data de início are bulk imports of historical data -> skip
-            dt_s = row.get('Data de início','').strip()
-            dt   = _parse_date_br(dt_s)  # None if no real start date
+            # Data da matrícula/consumo: prioriza "Data de início"; depois
+            # "Data de término"; por fim "Data da compra" (sempre presente).
+            # Como a Curseduca não loga consumo real, toda matrícula é tratada
+            # como aula concluída e atribuída ao melhor sinal de data disponível.
+            dt = _parse_date_br(row.get('Data de início','').strip()) \
+                 or _parse_date_br(row.get('Data de término','').strip()) \
+                 or _parse_date_br(row.get('Data da compra','').strip())
             return {'email': email, 'name': name, 'company': company,
                     'product_name': product, 'dt': dt, 'cr': dt}  # use dt as created_at for Cursa
         else:  # hubla
@@ -219,21 +221,27 @@ def processar():
     def _load_consumo_rows(path, source):
         if not path: return []
         rows_out = []
-        # Detect delimiter (Cursa exports as semicolon-separated)
-        import csv as _csv_mod
-        try:
-            with open(path, encoding='utf-8-sig') as _fd:
-                _dialect = _csv_mod.Sniffer().sniff(_fd.read(4096))
-            _delim = _dialect.delimiter
-        except:
-            _delim = ','
+        # Delimitador FIXO por fonte (mais robusto que sniffer):
+        #   Hubla = vírgula | Curseduca = ponto-e-vírgula (export pt-BR)
+        _delim = ';' if source == 'cursa' else ','
+        _skip_bulk = 0
         with open(path, encoding='utf-8-sig') as f:
             for row in csv.DictReader(f, delimiter=_delim):
-              # Pular importações em lote do Cursa (backfill da migração que duplica linhas da Hubla)
-                if source == 'cursa' and row.get('Origem','').strip() == 'Importação em lote': continue
+                if source == 'cursa':
+                    # Pular APENAS "Importação em lote": é o backfill da migração que
+                    # DUPLICA o histórico que já vem completo da Hubla (evita sobreposição).
+                    if (row.get('Origem', '') or '').strip() == 'Importação em lote':
+                        _skip_bulk += 1
+                        continue
+                    # REGRA DE NEGÓCIO: a Curseduca NÃO registra log de consumo, então o
+                    # campo "Progresso" não é confiável. Toda matrícula nativa é contada
+                    # como aula 100% concluída (NÃO filtrar por progresso).
                 n = _normalize_row(row, source)
                 if n['email'] and '@' in n['email']:
                     rows_out.append(n)
+        if source == 'cursa':
+            print(f"  Cursa: ignoradas {_skip_bulk} importações em lote (dedupe Hubla); "
+                  f"toda matrícula nativa contada como aula concluída")
         return rows_out
 
     _rows_hubla = _load_consumo_rows(p_consumo, 'hubla')
